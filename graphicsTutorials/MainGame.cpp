@@ -1,22 +1,19 @@
 #include "MainGame.h"
 #include <iostream>
 #include <string>
+#include "errors.h"
+#include "ImageLoader.h"
 
-void fatalError(std::string errorString){
 
-	std::cout << errorString << std::endl;
-	std::cout << "Enter any key to quit...";
-	int tmp;
-	std::cin >> tmp;
-	SDL_Quit();
-}
 
-MainGame::MainGame()
+MainGame::MainGame() :
+		_screenWidth(1024),
+		_screenHeight(768),
+		_time(0.0f),
+		_window(nullptr),
+		_gameState(GameState::PLAY)
 {
-	_window = nullptr;
-	_screenWidth = 1024;
-	_screenHeight = 768;
-	_gameState = GameState::PLAY;
+		
 }
 
 
@@ -27,6 +24,10 @@ MainGame::~MainGame()
 void MainGame::run(){
 
 	initSystems();
+
+	_sprite.init(-1.0f, -1.0f, 2.0f, 2.0f);
+
+	_playerTexture = ImageLoader::loadPNG("Textures/jimmyJump_pack/PNG/CharacterRight_Standing.png");
 
 	gameLoop();
 
@@ -55,12 +56,24 @@ void MainGame::initSystems(){
 
 	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 
+	initShaders();
+
+}
+
+void MainGame::initShaders() {
+	_colorProgram.compileShaders("Shaders/colorShading.vert", "Shaders/colorShading.frag");
+	_colorProgram.addAttribute("vertexPosition");
+	_colorProgram.addAttribute("vertexColor");
+	_colorProgram.addAttribute("vertexUV");
+	_colorProgram.linkShaders();
+
 }
 
 void MainGame::gameLoop(){
 
 	while (_gameState != GameState::EXIT){
 		processInput();
+		_time += 0.1;
 		drawGame();
 	}
 
@@ -82,25 +95,30 @@ void MainGame::processInput(){
 
 }
 
+//Draws the game using openGL
 void MainGame::drawGame(){
 
+	//set the base depth to 1.0
 	glClearDepth(1.0);
+	// Clear the color and depth buffer
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glEnableClientState(GL_COLOR_ARRAY);
+	_colorProgram.use();
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, _playerTexture.id);
+	GLint textureLocation = _colorProgram.getUniformLocation("mySampler");
+	glUniform1i(textureLocation, 0);
 
-	glBegin(GL_TRIANGLES);
-	glColor3f(1.0f, 0.0f, 0.0f);
-	glVertex2f(0, 0);
-	glVertex2f(0, 500);
-	glVertex2f(500, 500);
-	glEnd();
+	GLint timeLocation = _colorProgram.getUniformLocation("time");
+	glUniform1f(timeLocation, _time);
 
-	glBegin(GL_POLYGON);
-	glColor3f(1.0f, 0.5f, 0.0f);
-	glVertex2f(1023, 767);
-	glVertex2f(500, 500);
-	glEnd();
+	//draw our sprite
+	_sprite.draw();
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	_colorProgram.unuse();
 	
+	//Swap our buffer and draw everything to the screen
 	SDL_GL_SwapWindow(_window);
 }
